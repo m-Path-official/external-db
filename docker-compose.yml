@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:6.0
+    container_name: dbproxy-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      # Seed the root user using values from .env
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-root}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-mpath}
+    volumes:
+      - mongo_data:/data/db
+      # Initialization scripts to create schema/indexes at first run
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: dbproxy-app
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Inside the Docker network the hostname for Mongo is the service name `mongo`
+      MONGO_HOST: ${MONGO_HOST:-mongo:27017}
+      # Ensure app binds to container network
+      APP_HOST: ${APP_HOST:-0.0.0.0}
+      APP_PORT: ${APP_PORT:-8000}
+    ports:
+      - "${APP_PORT:-8000}:${APP_PORT:-8000}"
+    # Optionally mount the project for live-reload if you use UVICORN_RELOAD=true in .env
+    # volumes:
+    #   - .:/app
+
+volumes:
+  mongo_data:

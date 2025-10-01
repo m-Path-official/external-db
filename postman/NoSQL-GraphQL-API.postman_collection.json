@@ -1,0 +1,207 @@
+{
+  "info": {
+    "name": "NoSQL GraphQL API",
+    "description": "Postman collection for testing the FastAPI + Strawberry GraphQL API backed by MongoDB.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "apiSecret",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Root",
+      "request": {
+        "method": "GET",
+        "header": [
+                {
+                  "key": "X-API-SECRET",
+                  "value": "{{apiSecret}}"
+                }
+              ],
+        "url": {
+          "raw": "{{baseUrl}}/",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            ""
+          ]
+        }
+      }
+    },
+    {
+      "name": "GraphQL",
+      "item": [
+        {
+          "name": "List Documents",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-SECRET",
+                "value": "{{apiSecret}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query { listDocuments { id identifier type data } }",
+                "variables": "{}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-SECRET",
+                "value": "{{apiSecret}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query GetDocument($identifier: String!, $type: String!) { getDocument(identifier: $identifier, type: $type) { id identifier type data } }",
+                "variables": "{\n  \"identifier\": \"doc-1\",\n  \"type\": \"note\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-SECRET",
+                "value": "{{apiSecret}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CreateDocument($identifier: String!, $type: String!, $data: String!) { createDocument(identifier: $identifier, type: $type, data: $data) { id identifier type data } }",
+                "variables": "{\n  \"identifier\": \"doc-1\",\n  \"type\": \"note\",\n  \"data\": \"Hello world\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-SECRET",
+                "value": "{{apiSecret}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation UpdateDocument($identifier: String!, $type: String!, $newData: String) { updateDocument(identifier: $identifier, type: $type, newData: $newData) { id identifier type data } }",
+                "variables": "{\n  \"identifier\": \"doc-1\",\n  \"type\": \"note\",\n  \"newData\": \"Updated text\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-SECRET",
+                "value": "{{apiSecret}}"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation DeleteDocument($identifier: String!, $type: String!) { deleteDocument(identifier: $identifier, type: $type) }",
+                "variables": "{\n  \"identifier\": \"doc-1\",\n  \"type\": \"note\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/graphql",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "graphql"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
