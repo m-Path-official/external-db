@@ -48,6 +48,8 @@ from strawberry.fastapi import GraphQLRouter
 from pymongo import MongoClient, ReturnDocument
 from dotenv import load_dotenv
 import os
+import json
+from starlette.responses import Response
 
 # Load environment variables from .env if present (override any existing env)
 # Also support hot-reloading when the .env file changes.
@@ -125,6 +127,13 @@ class DocumentType:
     data: str
 
 
+@strawberry.input
+class CreateDocumentInput:
+    identifier: str
+    type: str
+    data: str
+
+
 # Define the Query class. This contains fields for fetching data.
 @strawberry.type
 class Query:
@@ -143,12 +152,22 @@ class Query:
         return None
 
     @strawberry.field
-    def list_documents(self) -> List[DocumentType]:
-        """Fetches all documents from the database."""
-        docs = []
-        for d in documents_collection.find():
+    def list_documents(self, type: Optional[str] = None) -> List[DocumentType]:
+        """Fetches documents.
+        - If `type` is provided, returns all documents from that type's collection.
+        - Otherwise, returns documents from the default `documents` collection.
+        """
+        docs: List[DocumentType] = []
+        if type:
+            coll = collection_for_type(type)
+            cursor = coll.find()
+        else:
+            cursor = documents_collection.find()
+        for d in cursor:
             d['id'] = str(d['_id'])
             d.pop('_id', None)
+            if type and 'type' not in d:
+                d['type'] = type
             docs.append(DocumentType(**d))
         return docs
 
@@ -158,14 +177,68 @@ class Query:
 class Mutation:
     @strawberry.field
     def create_document(self, identifier: str, type: str, data: str) -> DocumentType:
-        """Creates a new document in the database."""
+        """Creates a new document in the database.
+        Prevents duplicates for the same (type, identifier) combination.
+        """
         coll = collection_for_type(type)
+        # Prevent duplicate by checking existing identifier within the collection for this type
+        existing = coll.find_one({"identifier": identifier})
+        if existing:
+            raise ValueError(f"Document with identifier '{identifier}' and type '{type}' already exists")
+
         new_doc = {'identifier': identifier, 'type': type, 'data': data}
         result = coll.insert_one(new_doc)
         new_doc['id'] = str(result.inserted_id)
         # Ensure no raw Mongo _id leaks into the GraphQL type
         new_doc.pop('_id', None)
         return DocumentType(**new_doc)
+
+    @strawberry.field
+    def create_documents(self, items: List[CreateDocumentInput]) -> List[DocumentType]:
+        """Creates multiple documents in batches grouped by their type.
+        All-or-nothing: if any (type, identifier) already exists or is duplicated within input,
+        an error is raised and nothing is inserted.
+        Returns the list of created documents with IDs on success.
+        """
+        if not items:
+            return []
+
+        # Group items by their type to target the appropriate collections
+        groups: dict[str, list[dict]] = {}
+        for it in items:
+            groups.setdefault(it.type, []).append({
+                'identifier': it.identifier,
+                'type': it.type,
+                'data': it.data,
+            })
+
+        # Validate no duplicate identifiers within the same type in the input
+        for t, docs in groups.items():
+            ids = [d['identifier'] for d in docs]
+            dupes = {i for i in ids if ids.count(i) > 1}
+            if dupes:
+                raise ValueError(f"Duplicate identifiers in request for type '{t}': {sorted(list(dupes))}")
+
+        # Check database for existing identifiers for each type before inserting (all-or-nothing)
+        for t, docs in groups.items():
+            coll = collection_for_type(t)
+            ids = [d['identifier'] for d in docs]
+            existing = list(coll.find({"identifier": {"$in": ids}}, {"identifier": 1, "_id": 0}))
+            if existing:
+                existing_ids = sorted([e['identifier'] for e in existing])
+                raise ValueError(f"Documents already exist for type '{t}' with identifiers: {existing_ids}")
+
+        # If validation passes for all groups, perform inserts
+        created: List[DocumentType] = []
+        for t, docs in groups.items():
+            if not docs:
+                continue
+            coll = collection_for_type(t)
+            result = coll.insert_many(docs)
+            for doc, oid in zip(docs, result.inserted_ids):
+                doc['id'] = str(oid)
+                created.append(DocumentType(**doc))
+        return created
 
     @strawberry.field
     def update_document(self, identifier: str, type: str, new_data: Optional[str] = None) -> Optional[DocumentType]:
@@ -201,6 +274,15 @@ class Mutation:
         result = coll.delete_one({"identifier": identifier})
         return result.deleted_count > 0
 
+    @strawberry.field
+    def delete_documents(self, type: str, identifiers: List[str]) -> int:
+        """Deletes multiple documents by `identifier` for the given type.
+        Returns the number of documents deleted.
+        """
+        coll = collection_for_type(type)
+        result = coll.delete_many({"identifier": {"$in": identifiers}})
+        return int(result.deleted_count)
+
 
 # --- API and GraphQL Integration ---
 
@@ -224,7 +306,55 @@ async def verify_api_secret(request: Request, call_next):
         provided = request.headers.get("x-api-secret") or request.headers.get("X-Api-Secret")
         if provided != api_secret:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API secret")
+
+    # Proceed to the next handler and possibly adjust status codes for GraphQL errors
     response = await call_next(request)
+
+    # Only post-process GraphQL responses to map known errors to HTTP status codes
+    if request.url.path.startswith("/graphql") and request.method.upper() == "POST":
+        try:
+            # Buffer the streaming body
+            body = b""
+            async for chunk in response.body_iterator:
+                body += chunk
+
+            # Defaults
+            status_code = response.status_code
+            media_type = response.media_type or "application/json"
+            headers = dict(response.headers)
+
+            new_status = None
+            try:
+                payload = json.loads(body.decode() or "{}")
+            except Exception:
+                payload = None
+
+            if isinstance(payload, dict) and payload.get("errors"):
+                # Default to 400 for GraphQL errors
+                new_status = 400
+                # If duplicate-related errors detected, use 409 Conflict
+                messages = []
+                for err in payload.get("errors", []):
+                    if isinstance(err, dict):
+                        msg = (err.get("message") or "")
+                    else:
+                        msg = str(err)
+                    messages.append(msg.lower())
+                duplicate_markers = [
+                    "already exists",
+                    "documents already exist",
+                    "duplicate identifiers",
+                    "duplicate key error",
+                ]
+                if any(any(marker in m for marker in duplicate_markers) for m in messages):
+                    new_status = 409
+
+            # Rebuild the response with potentially updated status code
+            return Response(content=body, status_code=new_status or status_code, media_type=media_type, headers=headers)
+        except Exception:
+            # On any failure, return the original response with empty body if already consumed
+            return Response(content=b"", status_code=response.status_code, media_type=response.media_type, headers=dict(response.headers))
+
     return response
 
 # Create the GraphQL router, which handles all GraphQL requests.

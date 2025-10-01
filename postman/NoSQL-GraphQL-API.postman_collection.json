@@ -200,6 +200,60 @@
               ]
             }
           }
+        },
+        {
+          "name": "List Documents (By Type)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-SECRET", "value": "{{apiSecret}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query ListByType($type: String!) { listDocuments(type: $type) { id identifier type data } }",
+                "variables": "{\n  \"type\": \"note\"\n}"
+              }
+            },
+            "url": { "raw": "{{baseUrl}}/graphql", "host": ["{{baseUrl}}"], "path": ["graphql"] }
+          }
+        },
+        {
+          "name": "Create Documents (Batch)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-SECRET", "value": "{{apiSecret}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CreateDocuments($items: [CreateDocumentInput!]!) { createDocuments(items: $items) { id identifier type data } }",
+                "variables": "{\n  \"items\": [\n    { \"identifier\": \"doc-1\", \"type\": \"note\", \"data\": \"Hello\" },\n    { \"identifier\": \"doc-2\", \"type\": \"note\", \"data\": \"World\" }\n  ]\n}"
+              }
+            },
+            "url": { "raw": "{{baseUrl}}/graphql", "host": ["{{baseUrl}}"], "path": ["graphql"] }
+          }
+        },
+        {
+          "name": "Delete Documents (Batch)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-SECRET", "value": "{{apiSecret}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation DeleteDocuments($type: String!, $identifiers: [String!]!) { deleteDocuments(type: $type, identifiers: $identifiers) }",
+                "variables": "{\n  \"type\": \"note\",\n  \"identifiers\": [\n    \"doc-1\", \n    \"doc-2\"\n  ]\n}"
+              }
+            },
+            "url": { "raw": "{{baseUrl}}/graphql", "host": ["{{baseUrl}}"], "path": ["graphql"] }
+          }
         }
       ]
     }
