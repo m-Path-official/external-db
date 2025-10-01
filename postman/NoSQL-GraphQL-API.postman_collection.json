@@ -254,6 +254,24 @@
             },
             "url": { "raw": "{{baseUrl}}/graphql", "host": ["{{baseUrl}}"], "path": ["graphql"] }
           }
+        },
+        {
+          "name": "Get Documents (Batch)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-SECRET", "value": "{{apiSecret}}" }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query GetDocuments($type: String!, $identifiers: [String!]!) { getDocuments(type: $type, identifiers: $identifiers) { id identifier type data } }",
+                "variables": "{\n  \"type\": \"note\",\n  \"identifiers\": [\n    \"doc-1\", \n    \"doc-2\"\n  ]\n}"
+              }
+            },
+            "url": { "raw": "{{baseUrl}}/graphql", "host": ["{{baseUrl}}"], "path": ["graphql"] }
+          }
         }
       ]
     }

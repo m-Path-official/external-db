@@ -152,6 +152,26 @@ class Query:
         return None
 
     @strawberry.field
+    def get_documents(self, type: str, identifiers: List[str]) -> List[DocumentType]:
+        """Fetch multiple documents by identifiers for the given type.
+        Returns only those found. If an identifier is missing, it is simply not included.
+        The order of results follows the order of the provided identifiers.
+        """
+        if not identifiers:
+            return []
+        coll = collection_for_type(type)
+        cursor = coll.find({"identifier": {"$in": identifiers}})
+        found = {}
+        for d in cursor:
+            if 'type' not in d:
+                d['type'] = type
+            d['id'] = str(d['_id'])
+            d.pop('_id', None)
+            found[d['identifier']] = DocumentType(**d)
+        # Preserve input order
+        return [found[i] for i in identifiers if i in found]
+
+    @strawberry.field
     def list_documents(self, type: Optional[str] = None) -> List[DocumentType]:
         """Fetches documents.
         - If `type` is provided, returns all documents from that type's collection.
