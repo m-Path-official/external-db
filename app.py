@@ -257,6 +257,8 @@ class Mutation:
             result = coll.insert_many(docs)
             for doc, oid in zip(docs, result.inserted_ids):
                 doc['id'] = str(oid)
+                # Remove Mongo's internal _id to avoid passing it to the GraphQL type
+                doc.pop('_id', None)
                 created.append(DocumentType(**doc))
         return created
 
@@ -325,7 +327,9 @@ async def verify_api_secret(request: Request, call_next):
     if api_secret:  # only enforce if configured
         provided = request.headers.get("x-api-secret") or request.headers.get("X-Api-Secret")
         if provided != api_secret:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API secret")
+            # Return a direct 401 response to avoid unhandled exceptions causing 500s in some setups
+            from starlette.responses import JSONResponse
+            return JSONResponse({"detail": "Invalid or missing API secret"}, status_code=status.HTTP_401_UNAUTHORIZED)
 
     # Proceed to the next handler and possibly adjust status codes for GraphQL errors
     response = await call_next(request)
