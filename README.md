@@ -1,4 +1,16 @@
-Project Setup and Run Guide
+# External-DB
+
+A reference implementation for setting up on-premise storage for the m-Path platform.
+Intended as an educational example to help users run storage on their own systems.
+
+> ⚠️ **Disclaimer:**
+> This software is provided "as is" for educational purposes.
+> m-Path Software makes no warranties, express or implied, regarding its functionality, safety, or suitability for any environment.
+> Users are solely responsible for reviewing, testing, and adapting this software for their own use, including data integrity, system compatibility, and security.
+
+---
+
+## Project Setup and Run Guide
 
 Prerequisites
 - macOS with Homebrew or Ubuntu/Debian Linux
@@ -77,3 +89,9 @@ Docker (Containers)
 Stopping and cleanup
 - Stop containers: docker compose down
 - Stop and remove volumes (including Mongo data): docker compose down -v
+
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE)
