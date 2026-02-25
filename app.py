@@ -316,7 +316,7 @@ schema = strawberry.Schema(query=Query, mutation=Mutation)
 app = FastAPI(
     title="NoSQL GraphQL API with MongoDB",
     description="A simple API for unstructured documents using MongoDB.",
-    version="1.0.0"
+    version="1.1.0"
 )
 
 # Enable HTTPS redirection if configured
