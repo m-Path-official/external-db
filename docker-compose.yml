@@ -37,9 +37,9 @@ services:
       APP_PORT: ${APP_PORT:-8000}
     ports:
       - "${APP_PORT:-8000}:${APP_PORT:-8000}"
-    # Optionally mount the project for live-reload if you use UVICORN_RELOAD=true in .env
-    # volumes:
-    #   - .:/app
+    # Mount the project for live-reload
+    volumes:
+      - .:/app
 
 volumes:
   mongo_data:
