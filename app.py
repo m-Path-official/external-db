@@ -26,7 +26,7 @@
 # Notes:
 # - If you don't set any env vars, the app uses mongodb://localhost:27017 and DB 'simple_graphql_db'.
 # - python-dotenv is supported; place the variables above into a .env file in the project root.
-
+import sys
 from typing import List, Optional
 # Compatibility patch for Python 3.10+ where ABCs moved to collections.abc
 import collections
@@ -44,6 +44,7 @@ if not hasattr(collections, "Sequence"):
 
 import strawberry
 from fastapi import FastAPI, Request, HTTPException, status
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from strawberry.fastapi import GraphQLRouter
 from pymongo import MongoClient, ReturnDocument
 from dotenv import load_dotenv
@@ -315,8 +316,13 @@ schema = strawberry.Schema(query=Query, mutation=Mutation)
 app = FastAPI(
     title="NoSQL GraphQL API with MongoDB",
     description="A simple API for unstructured documents using MongoDB.",
-    version="1.0.0"
+    version="1.1.0"
 )
+
+# Enable HTTPS redirection if configured
+force_https = os.getenv("FORCE_HTTPS", "false").lower() == "true"
+if force_https:
+    app.add_middleware(HTTPSRedirectMiddleware)
 
 # Middleware to enforce API secret on every request if configured.
 @app.middleware("http")
@@ -326,7 +332,7 @@ async def verify_api_secret(request: Request, call_next):
     api_secret = os.getenv("API_SECRET")
     if api_secret:  # only enforce if configured
         provided = request.headers.get("x-api-secret") or request.headers.get("X-Api-Secret")
-        if provided != api_secret:
+        if api_secret is not None and provided != api_secret:
             # Return a direct 401 response to avoid unhandled exceptions causing 500s in some setups
             from starlette.responses import JSONResponse
             return JSONResponse({"detail": "Invalid or missing API secret"}, status_code=status.HTTP_401_UNAUTHORIZED)
@@ -382,7 +388,13 @@ async def verify_api_secret(request: Request, call_next):
     return response
 
 # Create the GraphQL router, which handles all GraphQL requests.
-graphql_app = GraphQLRouter(schema)
+# The playground can be enabled/disabled via an environment variable.
+graphql_playground_enabled = os.getenv("GRAPHQL_PLAYGROUND", "true").lower() == "true"
+graphql_app = GraphQLRouter(
+    schema,
+    graphql_ide="graphiql" if graphql_playground_enabled else None,
+    allow_queries_via_get=True
+)
 
 # Add the GraphQL endpoint to our FastAPI application.
 app.include_router(graphql_app, prefix="/graphql")
@@ -391,7 +403,10 @@ app.include_router(graphql_app, prefix="/graphql")
 # You can also add other standard REST endpoints if you wish.
 @app.get("/")
 async def root():
-    return {"message": "Welcome to the NoSQL GraphQL API! Navigate to /graphql for the playground."}
+    message = "Welcome to the NoSQL GraphQL API!"
+    if graphql_playground_enabled:
+        message += " Navigate to /graphql for the playground."
+    return {"message": message}
 
 
 if __name__ == "__main__":
@@ -399,4 +414,20 @@ if __name__ == "__main__":
     import uvicorn
     host = os.getenv("APP_HOST", "0.0.0.0")
     port = int(os.getenv("APP_PORT", "8000"))
-    uvicorn.run("app:app", host=host, port=port, reload=os.getenv("UVICORN_RELOAD", "false").lower() == "true")
+    reload = os.getenv("UVICORN_RELOAD", "false").lower() == "true"
+    
+    # SSL configuration
+    ssl_certfile = os.getenv("SSL_CERTFILE")
+    ssl_keyfile = os.getenv("SSL_KEYFILE")
+    
+    uvicorn_kwargs = {
+        "host": host,
+        "port": port,
+        "reload": reload,
+    }
+    
+    if ssl_certfile and ssl_keyfile:
+        uvicorn_kwargs["ssl_certfile"] = ssl_certfile
+        uvicorn_kwargs["ssl_keyfile"] = ssl_keyfile
+        
+    uvicorn.run("app:app", **uvicorn_kwargs)
